@@ -1,0 +1,264 @@
+name: Render Banach-Tarski Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      audio_url:
+        description: "URL to the audio file (MP3). Leave empty to use the bundled audio."
+        required: false
+        type: string
+        default: ""
+
+env:
+  NODE_VERSION: "18"
+
+jobs:
+  # ============================================================
+  # Job 1: Render all 4 video chunks in parallel
+  # ============================================================
+  render-chunk-1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx remotion browser install
+
+      - name: Render Chunk 1 (Phase 1 - Solid Sphere, 0:00-0:26.67)
+        run: |
+          npx remotion render BanachTarskiFull Chunk-Phase1 \
+            --codec=h264 \
+            --image-format=png \
+            --quality=100 \
+            --scale=1 \
+            --concurrency=2 \
+            --out=chunk-1.mp4
+        timeout-minutes: 120
+
+      - name: Upload Chunk 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunk-1
+          path: chunk-1.mp4
+          retention-days: 1
+
+  render-chunk-2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx remotion browser install
+
+      - name: Render Chunk 2 (Phase 2 - Split, 0:26.67-0:50)
+        run: |
+          npx remotion render BanachTarskiFull Chunk-Phase2 \
+            --codec=h264 \
+            --image-format=png \
+            --quality=100 \
+            --scale=1 \
+            --concurrency=2 \
+            --out=chunk-2.mp4
+        timeout-minutes: 120
+
+      - name: Upload Chunk 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunk-2
+          path: chunk-2.mp4
+          retention-days: 1
+
+  render-chunk-3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx remotion browser install
+
+      - name: Render Chunk 3 (Phase 3 - Reassembly, 0:50-1:20)
+        run: |
+          npx remotion render BanachTarskiFull Chunk-Phase3 \
+            --codec=h264 \
+            --image-format=png \
+            --quality=100 \
+            --scale=1 \
+            --concurrency=2 \
+            --out=chunk-3.mp4
+        timeout-minutes: 120
+
+      - name: Upload Chunk 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunk-3
+          path: chunk-3.mp4
+          retention-days: 1
+
+  render-chunk-4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx remotion browser install
+
+      - name: Render Chunk 4 (Phase 4 - Infinity, 1:20-2:00)
+        run: |
+          npx remotion render BanachTarskiFull Chunk-Phase4 \
+            --codec=h264 \
+            --image-format=png \
+            --quality=100 \
+            --scale=1 \
+            --concurrency=2 \
+            --out=chunk-4.mp4
+        timeout-minutes: 120
+
+      - name: Upload Chunk 4
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunk-4
+          path: chunk-4.mp4
+          retention-days: 1
+
+  # ============================================================
+  # Job 2: Concatenate chunks and merge with audio
+  # ============================================================
+  assemble:
+    needs: [render-chunk-1, render-chunk-2, render-chunk-3, render-chunk-4]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all chunks
+        uses: actions/download-artifact@v4
+        with:
+          path: chunks/
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Get audio file
+        run: |
+          if [ -n "${{ github.event.inputs.audio_url }}" ]; then
+            echo "Downloading audio from provided URL..."
+            curl -L "${{ github.event.inputs.audio_url }}" -o audio.mp3
+          elif [ -f "assets/audio.mp3" ]; then
+            echo "Using bundled audio..."
+            cp assets/audio.mp3 audio.mp3
+          else
+            echo "ERROR: No audio file found. Provide audio_url input or place audio.mp3 in assets/"
+            exit 1
+          fi
+          echo "Audio file size:"
+          ls -la audio.mp3
+          echo "Audio duration:"
+          ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.mp3
+
+      - name: Concatenate video chunks
+        run: |
+          # Create concat list
+          echo "file 'chunks/chunk-1/chunk-1.mp4'" > concat.txt
+          echo "file 'chunks/chunk-2/chunk-2.mp4'" >> concat.txt
+          echo "file 'chunks/chunk-3/chunk-3.mp4'" >> concat.txt
+          echo "file 'chunks/chunk-4/chunk-4.mp4'" >> concat.txt
+
+          # Concatenate with ffmpeg (re-encode to ensure seamless join)
+          ffmpeg -y -f concat -safe 0 -i concat.txt \
+            -c:v libx264 -preset slow -crf 18 \
+            -pix_fmt yuv420p \
+            -r 60 -s 1080x1920 \
+            concatenated.mp4
+
+          echo "Concatenated video info:"
+          ffprobe -v quiet -show_entries stream=codec_name,width,height,r_frame_rate,duration -of default concatenated.mp4
+
+      - name: Merge video with audio
+        run: |
+          # Get durations
+          VIDEO_DURATION=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4)
+          AUDIO_DURATION=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.mp3)
+          echo "Video duration: ${VIDEO_DURATION}s"
+          echo "Audio duration: ${AUDIO_DURATION}s"
+
+          # Merge: video from concatenation, audio from mp3
+          # If audio is shorter, pad with silence; if longer, trim to video length
+          ffmpeg -y -i concatenated.mp4 -i audio.mp3 \
+            -c:v libx264 -preset slow -crf 17 \
+            -c:a aac -b:a 320k \
+            -pix_fmt yuv420p \
+            -r 60 -s 1080x1920 \
+            -shortest \
+            -map 0:v:0 -map 1:a:0 \
+            Banach-Tarski-Final.mp4
+
+          echo "Final video info:"
+          ls -lh Banach-Tarski-Final.mp4
+          ffprobe -v quiet -show_entries stream=codec_name,width,height,r_frame_rate,duration -of default Banach-Tarski-Final.mp4
+
+      - name: Upload final video
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-video
+          path: Banach-Tarski-Final.mp4
+          retention-days: 7
+
+      - name: Create Release with final video
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "video-${{ github.run_id }}"
+          name: "Banach-Tarski Video Build #${{ github.run_number }}"
+          body: |
+            🎬 **Banach-Tarski Paradox Video** - Build #${{ github.run_number }}
+
+            **Video specs:**
+            - Resolution: 1080x1920 (9:16 vertical)
+            - Frame rate: 60 fps
+            - Duration: ~120 seconds
+            - Audio: AAC 320kbps
+
+            **Chunks rendered:**
+            - Chunk 1: Phase 1 - Solid Sphere (0:00 - 0:26.67)
+            - Chunk 2: Phase 2 - Split/Decomposition (0:26.67 - 0:50)
+            - Chunk 3: Phase 3 - Reassembly/Duplication (0:50 - 1:20)
+            - Chunk 4: Phase 4 - Infinity State (1:20 - 2:00)
+          files: Banach-Tarski-Final.mp4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

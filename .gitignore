@@ -1,0 +1,9 @@
+node_modules
+remotion.config.ts
+.env
+*.mp4
+*.mp3
+chunk-*.mp4
+concatenated.mp4
+concat.txt
+.DS_Store
