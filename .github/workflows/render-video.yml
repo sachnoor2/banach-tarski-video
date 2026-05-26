@@ -14,7 +14,7 @@ env:
 
 jobs:
   # ============================================================
-  # Job 1: Render all 4 video chunks in parallel
+  # Render all 4 video chunks in parallel
   # ============================================================
   render-chunk-1:
     runs-on: ubuntu-latest
@@ -35,14 +35,13 @@ jobs:
 
       - name: Render Chunk 1 (Phase 1 - Solid Sphere, 0:00-0:26.67)
         run: |
-          npx remotion render BanachTarskiFull Chunk-Phase1 \
+          npx remotion render Chunk-Phase1 \
             --codec=h264 \
             --image-format=png \
             --quality=100 \
             --scale=1 \
             --concurrency=2 \
             --out=chunk-1.mp4
-        timeout-minutes: 120
 
       - name: Upload Chunk 1
         uses: actions/upload-artifact@v4
@@ -70,14 +69,13 @@ jobs:
 
       - name: Render Chunk 2 (Phase 2 - Split, 0:26.67-0:50)
         run: |
-          npx remotion render BanachTarskiFull Chunk-Phase2 \
+          npx remotion render Chunk-Phase2 \
             --codec=h264 \
             --image-format=png \
             --quality=100 \
             --scale=1 \
             --concurrency=2 \
             --out=chunk-2.mp4
-        timeout-minutes: 120
 
       - name: Upload Chunk 2
         uses: actions/upload-artifact@v4
@@ -105,14 +103,13 @@ jobs:
 
       - name: Render Chunk 3 (Phase 3 - Reassembly, 0:50-1:20)
         run: |
-          npx remotion render BanachTarskiFull Chunk-Phase3 \
+          npx remotion render Chunk-Phase3 \
             --codec=h264 \
             --image-format=png \
             --quality=100 \
             --scale=1 \
             --concurrency=2 \
             --out=chunk-3.mp4
-        timeout-minutes: 120
 
       - name: Upload Chunk 3
         uses: actions/upload-artifact@v4
@@ -140,14 +137,13 @@ jobs:
 
       - name: Render Chunk 4 (Phase 4 - Infinity, 1:20-2:00)
         run: |
-          npx remotion render BanachTarskiFull Chunk-Phase4 \
+          npx remotion render Chunk-Phase4 \
             --codec=h264 \
             --image-format=png \
             --quality=100 \
             --scale=1 \
             --concurrency=2 \
             --out=chunk-4.mp4
-        timeout-minutes: 120
 
       - name: Upload Chunk 4
         uses: actions/upload-artifact@v4
@@ -157,7 +153,7 @@ jobs:
           retention-days: 1
 
   # ============================================================
-  # Job 2: Concatenate chunks and merge with audio
+  # Concatenate chunks and merge with audio
   # ============================================================
   assemble:
     needs: [render-chunk-1, render-chunk-2, render-chunk-3, render-chunk-4]
@@ -192,9 +188,9 @@ jobs:
           echo "Audio duration:"
           ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.mp3
 
-      - name: Concatenate video chunks
+      - name: Concatenate video chunks serially
         run: |
-          # Create concat list
+          # Create concat list in serial order: chunk 1 → 2 → 3 → 4
           echo "file 'chunks/chunk-1/chunk-1.mp4'" > concat.txt
           echo "file 'chunks/chunk-2/chunk-2.mp4'" >> concat.txt
           echo "file 'chunks/chunk-3/chunk-3.mp4'" >> concat.txt
@@ -208,9 +204,9 @@ jobs:
             concatenated.mp4
 
           echo "Concatenated video info:"
-          ffprobe -v quiet -show_entries stream=codec_name,width,height,r_frame_rate,duration -of default concatenated.mp4
+          ffprobe -v quiet -show_entries stream=codec_name,width,height,r_frame_rate,duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4
 
-      - name: Merge video with audio
+      - name: Merge concatenated video with audio
         run: |
           # Get durations
           VIDEO_DURATION=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4)
@@ -219,7 +215,7 @@ jobs:
           echo "Audio duration: ${AUDIO_DURATION}s"
 
           # Merge: video from concatenation, audio from mp3
-          # If audio is shorter, pad with silence; if longer, trim to video length
+          # -shortest ensures output ends when the shorter stream ends
           ffmpeg -y -i concatenated.mp4 -i audio.mp3 \
             -c:v libx264 -preset slow -crf 17 \
             -c:a aac -b:a 320k \
@@ -231,16 +227,16 @@ jobs:
 
           echo "Final video info:"
           ls -lh Banach-Tarski-Final.mp4
-          ffprobe -v quiet -show_entries stream=codec_name,width,height,r_frame_rate,duration -of default Banach-Tarski-Final.mp4
+          ffprobe -v quiet -show_entries stream=codec_name,width,height,r_frame_rate,duration -of default=noprint_wrappers=1:nokey=1 Banach-Tarski-Final.mp4
 
-      - name: Upload final video
+      - name: Upload final video as artifact
         uses: actions/upload-artifact@v4
         with:
           name: final-video
           path: Banach-Tarski-Final.mp4
           retention-days: 7
 
-      - name: Create Release with final video
+      - name: Create GitHub Release with final video
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "video-${{ github.run_id }}"
@@ -254,11 +250,13 @@ jobs:
             - Duration: ~120 seconds
             - Audio: AAC 320kbps
 
-            **Chunks rendered:**
+            **Chunks rendered in parallel:**
             - Chunk 1: Phase 1 - Solid Sphere (0:00 - 0:26.67)
             - Chunk 2: Phase 2 - Split/Decomposition (0:26.67 - 0:50)
             - Chunk 3: Phase 3 - Reassembly/Duplication (0:50 - 1:20)
             - Chunk 4: Phase 4 - Infinity State (1:20 - 2:00)
+
+            Chunks concatenated serially → merged with audio → final video.
           files: Banach-Tarski-Final.mp4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
