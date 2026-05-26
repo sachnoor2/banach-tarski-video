@@ -1,4 +1,3 @@
 import { registerRoot } from "remotion";
-import { RemotionRoot } from "./Root";
-
+import { RemotionRoot } from "./compositions/BanachTarskiFull";
 registerRoot(RemotionRoot);

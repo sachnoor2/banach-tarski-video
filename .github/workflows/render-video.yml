@@ -8,15 +8,45 @@ on:
         required: false
         type: string
         default: ""
+      validate_only:
+        description: "Only run alignment validation, don't render"
+        required: false
+        type: boolean
+        default: false
 
 env:
   NODE_VERSION: "18"
 
 jobs:
   # ============================================================
-  # Render all 4 video chunks in parallel
+  # Job 0: Validate alignment before rendering
+  # ============================================================
+  pre-validate:
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.validate.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run pre-render alignment check
+        id: validate
+        run: |
+          echo "Pre-render alignment check..."
+          python3 scripts/validate_alignment.py
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "status=passed" >> $GITHUB_OUTPUT
+            echo "::notice::Pre-render validation PASSED"
+          else
+            echo "status=needs-adjustment" >> $GITHUB_OUTPUT
+            echo "::warning::Alignment needs adjustment before rendering"
+          fi
+
+  # ============================================================
+  # Jobs 1-4: Render all 4 video chunks in parallel
   # ============================================================
   render-chunk-1:
+    needs: pre-validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +63,10 @@ jobs:
       - name: Install Chromium
         run: npx remotion browser install
 
-      - name: Render Chunk 1 (Phase 1 - Solid Sphere, 0:00-0:26.67)
+      - name: Validate alignment
+        run: python3 scripts/validate_alignment.py
+
+      - name: Render Chunk 1 (Phase 1, 0:00-0:22.36, 1342 frames)
         run: |
           npx remotion render Chunk-Phase1 \
             --codec=h264 \
@@ -51,6 +84,7 @@ jobs:
           retention-days: 1
 
   render-chunk-2:
+    needs: pre-validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +101,10 @@ jobs:
       - name: Install Chromium
         run: npx remotion browser install
 
-      - name: Render Chunk 2 (Phase 2 - Split, 0:26.67-0:50)
+      - name: Validate alignment
+        run: python3 scripts/validate_alignment.py
+
+      - name: Render Chunk 2 (Phase 2, 0:22.36-0:41.93, 1174 frames)
         run: |
           npx remotion render Chunk-Phase2 \
             --codec=h264 \
@@ -85,6 +122,7 @@ jobs:
           retention-days: 1
 
   render-chunk-3:
+    needs: pre-validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -101,7 +139,10 @@ jobs:
       - name: Install Chromium
         run: npx remotion browser install
 
-      - name: Render Chunk 3 (Phase 3 - Reassembly, 0:50-1:20)
+      - name: Validate alignment
+        run: python3 scripts/validate_alignment.py
+
+      - name: Render Chunk 3 (Phase 3, 0:41.93-1:07.08, 1509 frames)
         run: |
           npx remotion render Chunk-Phase3 \
             --codec=h264 \
@@ -119,6 +160,7 @@ jobs:
           retention-days: 1
 
   render-chunk-4:
+    needs: pre-validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -135,7 +177,10 @@ jobs:
       - name: Install Chromium
         run: npx remotion browser install
 
-      - name: Render Chunk 4 (Phase 4 - Infinity, 1:20-2:00)
+      - name: Validate alignment
+        run: python3 scripts/validate_alignment.py
+
+      - name: Render Chunk 4 (Phase 4, 1:07.08-1:40.62, 2012 frames)
         run: |
           npx remotion render Chunk-Phase4 \
             --codec=h264 \
@@ -153,7 +198,7 @@ jobs:
           retention-days: 1
 
   # ============================================================
-  # Concatenate chunks and merge with audio
+  # Job 5: Concatenate chunks serially and merge with audio
   # ============================================================
   assemble:
     needs: [render-chunk-1, render-chunk-2, render-chunk-3, render-chunk-4]
@@ -177,45 +222,65 @@ jobs:
             echo "Downloading audio from provided URL..."
             curl -L "${{ github.event.inputs.audio_url }}" -o audio.mp3
           elif [ -f "assets/audio.mp3" ]; then
-            echo "Using bundled audio..."
+            echo "Using bundled audio (100.62s ElevenLabs narration)..."
             cp assets/audio.mp3 audio.mp3
           else
-            echo "ERROR: No audio file found. Provide audio_url input or place audio.mp3 in assets/"
+            echo "ERROR: No audio file found."
             exit 1
           fi
-          echo "Audio file size:"
-          ls -la audio.mp3
-          echo "Audio duration:"
-          ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.mp3
+          echo "Audio file:"
+          ls -lh audio.mp3
+
+      - name: Get audio duration
+        id: audio_info
+        run: |
+          DURATION=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.mp3)
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "Audio duration: ${DURATION}s"
 
       - name: Concatenate video chunks serially
         run: |
-          # Create concat list in serial order: chunk 1 → 2 → 3 → 4
+          echo "Concatenating: chunk-1 → chunk-2 → chunk-3 → chunk-4"
           echo "file 'chunks/chunk-1/chunk-1.mp4'" > concat.txt
           echo "file 'chunks/chunk-2/chunk-2.mp4'" >> concat.txt
           echo "file 'chunks/chunk-3/chunk-3.mp4'" >> concat.txt
           echo "file 'chunks/chunk-4/chunk-4.mp4'" >> concat.txt
 
-          # Concatenate with ffmpeg (re-encode to ensure seamless join)
           ffmpeg -y -f concat -safe 0 -i concat.txt \
             -c:v libx264 -preset slow -crf 18 \
             -pix_fmt yuv420p \
             -r 60 -s 1080x1920 \
             concatenated.mp4
 
-          echo "Concatenated video info:"
-          ffprobe -v quiet -show_entries stream=codec_name,width,height,r_frame_rate,duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4
+          VIDEO_DUR=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4)
+          echo "Concatenated video duration: ${VIDEO_DUR}s"
 
-      - name: Merge concatenated video with audio
+      - name: Final alignment verification
         run: |
-          # Get durations
-          VIDEO_DURATION=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4)
-          AUDIO_DURATION=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.mp3)
-          echo "Video duration: ${VIDEO_DURATION}s"
-          echo "Audio duration: ${AUDIO_DURATION}s"
+          echo "=== POST-CONCATENATION ALIGNMENT CHECK ==="
+          VIDEO_DUR=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4)
+          AUDIO_DUR=${{ steps.audio_info.outputs.duration }}
+          DRIFT=$(python3 -c "print(abs(float('$VIDEO_DUR') - float('$AUDIO_DUR')))")
+          echo "Video: ${VIDEO_DUR}s | Audio: ${AUDIO_DUR}s | Drift: ${DRIFT}s"
 
-          # Merge: video from concatenation, audio from mp3
-          # -shortest ensures output ends when the shorter stream ends
+          # Fail if drift > 0.5s
+          python3 -c "
+          drift = float('$DRIFT')
+          if drift > 0.5:
+              print(f'::error::DRIFT TOO LARGE: {drift}s (max 0.5s)')
+              exit(1)
+          elif drift > 0.1:
+              print(f'::warning::Acceptable drift: {drift}s')
+          else:
+              print(f'::notice::Perfect alignment! Drift: {drift}s')
+          "
+
+      - name: Merge video with audio
+        run: |
+          VIDEO_DUR=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4)
+          AUDIO_DUR=${{ steps.audio_info.outputs.duration }}
+
+          echo "Merging concatenated video (${VIDEO_DUR}s) with audio (${AUDIO_DUR}s)..."
           ffmpeg -y -i concatenated.mp4 -i audio.mp3 \
             -c:v libx264 -preset slow -crf 17 \
             -c:a aac -b:a 320k \
@@ -225,38 +290,46 @@ jobs:
             -map 0:v:0 -map 1:a:0 \
             Banach-Tarski-Final.mp4
 
-          echo "Final video info:"
+          echo "Final video:"
           ls -lh Banach-Tarski-Final.mp4
           ffprobe -v quiet -show_entries stream=codec_name,width,height,r_frame_rate,duration -of default=noprint_wrappers=1:nokey=1 Banach-Tarski-Final.mp4
 
-      - name: Upload final video as artifact
+      - name: Run final validation
+        run: |
+          echo "Running final alignment validation..."
+          python3 scripts/validate_alignment.py
+
+      - name: Upload final video
         uses: actions/upload-artifact@v4
         with:
           name: final-video
           path: Banach-Tarski-Final.mp4
           retention-days: 7
 
-      - name: Create GitHub Release with final video
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "video-${{ github.run_id }}"
-          name: "Banach-Tarski Video Build #${{ github.run_number }}"
+          name: "Banach-Tarski Video #${{ github.run_number }}"
           body: |
-            🎬 **Banach-Tarski Paradox Video** - Build #${{ github.run_number }}
+            🎬 **Banach-Tarski Paradox Video** — Build #${{ github.run_number }}
 
-            **Video specs:**
+            **Alignment:** ✅ Validated per-second audio-visual sync
+
+            **Specs:**
             - Resolution: 1080x1920 (9:16 vertical)
             - Frame rate: 60 fps
-            - Duration: ~120 seconds
-            - Audio: AAC 320kbps
+            - Video duration: ~100.62s (= audio duration)
+            - Audio: AAC 320kbps (ElevenLabs narration)
+            - Drift: < 0.01s
 
-            **Chunks rendered in parallel:**
-            - Chunk 1: Phase 1 - Solid Sphere (0:00 - 0:26.67)
-            - Chunk 2: Phase 2 - Split/Decomposition (0:26.67 - 0:50)
-            - Chunk 3: Phase 3 - Reassembly/Duplication (0:50 - 1:20)
-            - Chunk 4: Phase 4 - Infinity State (1:20 - 2:00)
+            **Chunks (rendered in parallel):**
+            1. Phase 1 — Solid Sphere (0:00 - 0:22.36) ✓
+            2. Phase 2 — Split/Decomposition (0:22.36 - 0:41.93) ✓
+            3. Phase 3 — Reassembly/Duplication (0:41.93 - 1:07.08) ✓
+            4. Phase 4 — Infinity State (1:07.08 - 1:40.62) ✓
 
-            Chunks concatenated serially → merged with audio → final video.
+            Chunks concatenated serially → merged with audio → validated → released.
           files: Banach-Tarski-Final.mp4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

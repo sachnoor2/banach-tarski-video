@@ -15,6 +15,7 @@ import {
   GOLD_HEX,
   SET_COLORS,
   PHASE_BOUNDARIES,
+  COLOR_TRANSITIONS,
 } from "../shared";
 
 interface ChunkProps {
@@ -26,6 +27,8 @@ interface ChunkProps {
  * Renders the Banach-Tarski visualization for a specific chunk.
  * `useCurrentFrame()` returns local chunk frames (0-based).
  * We add `globalStartFrame` to get the global frame for animation math.
+ *
+ * Timing is synced to 100.6237s audio at 60fps = 6037 total frames.
  */
 export const BanachTarskiChunk: React.FC<ChunkProps> = ({ globalStartFrame }) => {
   const localFrame = useCurrentFrame();
@@ -36,19 +39,21 @@ export const BanachTarskiChunk: React.FC<ChunkProps> = ({ globalStartFrame }) =>
   const globalFrame = localFrame + globalStartFrame;
 
   // --- VOICE TIMING SPRINGS (use global frame) ---
+  // Phase 2 Split: starts at phase1End frame
   const splitSpring = spring({
     frame: Math.max(0, globalFrame - PHASE_BOUNDARIES.phase1End),
     fps,
     config: { damping: 18, stiffness: 50 },
   });
 
+  // Phase 3 Reassembly: starts at phase2End frame
   const duplicateSpring = spring({
     frame: Math.max(0, globalFrame - PHASE_BOUNDARIES.phase2End),
     fps,
     config: { damping: 22, stiffness: 40, mass: 1.2 },
   });
 
-  // Global rotation
+  // Global rotation across entire timeline
   const rotX = interpolate(globalFrame, [0, PHASE_BOUNDARIES.totalFrames], [0, Math.PI * 12]);
   const rotY = interpolate(globalFrame, [0, PHASE_BOUNDARIES.totalFrames], [0, Math.PI * 24]);
 
@@ -102,12 +107,7 @@ export const BanachTarskiChunk: React.FC<ChunkProps> = ({ globalStartFrame }) =>
             The Math Trap:
           </span>
           <br />
-          <span
-            style={{
-              color: "#ffffff",
-              textShadow: "0 0 20px rgba(255,255,255,0.6)",
-            }}
-          >
+          <span style={{ color: "#ffffff", textShadow: "0 0 20px rgba(255,255,255,0.6)" }}>
             1 Sphere = 2 Duplicates
           </span>
         </h1>
@@ -127,35 +127,31 @@ export const BanachTarskiChunk: React.FC<ChunkProps> = ({ globalStartFrame }) =>
         {[0, 1, 2, 3, 4].map((setId) => {
           const subset = points.filter((p) => p.setId === setId);
 
+          // Phase 2: explosion direction for each set
           const angle = (setId / 5) * Math.PI * 2;
           const explodeX = Math.cos(angle) * 380 * splitSpring;
           const explodeY = Math.sin(angle) * 380 * splitSpring;
 
+          // Phase 3: target positions for twin duplication
           const isTopCluster = setId < 3;
           const finalTargetY = isTopCluster ? -420 : 420;
 
+          // Smooth translation across transitions
           const currentTransformX = interpolate(duplicateSpring, [0, 1], [explodeX, 0]);
           const currentTransformY = interpolate(duplicateSpring, [0, 1], [explodeY, finalTargetY]);
 
+          // Volume scaling
           const individualScale = interpolate(duplicateSpring, [0, 1], [1, 1.75]);
 
-          // Color transitions
-          const phase1To2T = Math.max(
-            0,
-            Math.min(
-              1,
-              interpolate(globalFrame, [PHASE_BOUNDARIES.phase1End, PHASE_BOUNDARIES.phase1End + 200], [0, 1])
-            )
-          );
+          // Color: Gold → Set Color → Gold (synced to transitions)
+          const phase1To2T = Math.max(0, Math.min(1,
+            interpolate(globalFrame, [PHASE_BOUNDARIES.phase1End, COLOR_TRANSITIONS.phase1To2End], [0, 1])
+          ));
           const phase1To2Color = interpolateColor(GOLD_HEX, SET_COLORS[setId], phase1To2T);
 
-          const phase2To3T = Math.max(
-            0,
-            Math.min(
-              1,
-              interpolate(globalFrame, [PHASE_BOUNDARIES.phase2End, PHASE_BOUNDARIES.phase2End + 400], [0, 1])
-            )
-          );
+          const phase2To3T = Math.max(0, Math.min(1,
+            interpolate(globalFrame, [PHASE_BOUNDARIES.phase2End, COLOR_TRANSITIONS.phase2To3End], [0, 1])
+          ));
           const finalColor = interpolateColor(phase1To2Color, GOLD_HEX, phase2To3T);
 
           return (
@@ -173,7 +169,6 @@ export const BanachTarskiChunk: React.FC<ChunkProps> = ({ globalStartFrame }) =>
                 const posX = point.x * SPHERE_RADIUS * individualScale;
                 const posY = point.y * SPHERE_RADIUS * individualScale;
                 const posZ = point.z * SPHERE_RADIUS * individualScale;
-
                 const opacity = interpolate(point.z, [-1, 1], [0.2, 1]);
                 const blurValue = interpolate(point.z, [-1, 1], [3, 0]);
 
@@ -224,7 +219,6 @@ export const BanachTarskiChunk: React.FC<ChunkProps> = ({ globalStartFrame }) =>
             alignItems: "center",
           }}
         >
-          {/* Formula */}
           <div
             style={{
               fontSize: 44,
@@ -239,7 +233,6 @@ export const BanachTarskiChunk: React.FC<ChunkProps> = ({ globalStartFrame }) =>
             {formulaOverlay}
           </div>
 
-          {/* Divider */}
           <div
             style={{
               height: 1,
@@ -249,7 +242,6 @@ export const BanachTarskiChunk: React.FC<ChunkProps> = ({ globalStartFrame }) =>
             }}
           />
 
-          {/* Metadata row */}
           <div
             style={{
               width: "100%",
@@ -272,15 +264,10 @@ export const BanachTarskiChunk: React.FC<ChunkProps> = ({ globalStartFrame }) =>
               <span style={{ color: "#64748b", fontSize: 18, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Point Complexity
               </span>
-              <span
-                style={{
-                  color: "#e879f9",
-                  fontSize: 24,
-                  fontWeight: 700,
-                  textShadow: "0 0 8px rgba(232,121,249,0.4)",
-                  marginTop: 4,
-                }}
-              >
+              <span style={{
+                color: "#e879f9", fontSize: 24, fontWeight: 700,
+                textShadow: "0 0 8px rgba(232,121,249,0.4)", marginTop: 4,
+              }}>
                 {displayDensity}
               </span>
             </div>
