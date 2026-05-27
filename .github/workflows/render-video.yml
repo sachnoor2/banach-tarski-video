@@ -62,7 +62,7 @@ jobs:
         with:
           name: chunk-1
           path: chunk-1.mp4
-          retention-days: 1
+          retention-days: 5
 
   render-chunk-2:
     needs: pre-validate
@@ -86,7 +86,7 @@ jobs:
         with:
           name: chunk-2
           path: chunk-2.mp4
-          retention-days: 1
+          retention-days: 5
 
   render-chunk-3:
     needs: pre-validate
@@ -110,7 +110,7 @@ jobs:
         with:
           name: chunk-3
           path: chunk-3.mp4
-          retention-days: 1
+          retention-days: 5
 
   render-chunk-4:
     needs: pre-validate
@@ -134,7 +134,7 @@ jobs:
         with:
           name: chunk-4
           path: chunk-4.mp4
-          retention-days: 1
+          retention-days: 5
 
   # ============================================================
   # Concatenate chunks + merge with audio
@@ -145,11 +145,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all chunks
+      - name: Download chunk-1
         uses: actions/download-artifact@v4
         with:
-          pattern: chunk-*
-          merge-multiple: true
+          name: chunk-1
+          path: .
+
+      - name: Download chunk-2
+        uses: actions/download-artifact@v4
+        with:
+          name: chunk-2
+          path: .
+
+      - name: Download chunk-3
+        uses: actions/download-artifact@v4
+        with:
+          name: chunk-3
+          path: .
+
+      - name: Download chunk-4
+        uses: actions/download-artifact@v4
+        with:
+          name: chunk-4
           path: .
 
       - name: Install ffmpeg
