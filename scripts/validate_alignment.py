@@ -123,7 +123,7 @@ def validate_alignment():
     print("=" * 80)
     print("AUDIO-VISUAL ALIGNMENT VALIDATION REPORT")
     print("=" * 80)
-    print(f"Audio duration: {AUDIO_DURATION_SEC:.4f}s | Video: {TOTAL_FRAMES}f @ {fps}fps = {TOTAL_FRAMES/FPS:.4f}s")
+    print(f"Audio duration: {AUDIO_DURATION_SEC:.4f}s | Video: {TOTAL_FRAMES}f @ {FPS}fps = {TOTAL_FRAMES/FPS:.4f}s")
     print(f"Drift: {abs(AUDIO_DURATION_SEC - TOTAL_FRAMES/FPS):.4f}s")
     print()
 

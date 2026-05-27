@@ -9,11 +9,14 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.validate.outputs.status }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Run alignment validator
         id: validate
+        continue-on-error: true
         run: |
           echo "Running per-second audio-visual alignment check..."
           python3 scripts/validate_alignment.py
@@ -21,11 +24,15 @@ jobs:
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
           if [ $EXIT_CODE -ne 0 ]; then
             echo "status=failed" >> $GITHUB_OUTPUT
-            echo "::error::Alignment validation FAILED — audio and video are out of sync"
+            echo "::error::Alignment validation FAILED"
           else
             echo "status=passed" >> $GITHUB_OUTPUT
-            echo "::notice::Alignment validation PASSED — all seconds aligned"
+            echo "::notice::Alignment validation PASSED"
           fi
+
+      - name: Set default output
+        if: steps.validate.outcome == 'failure' && steps.validate.outputs.status == ''
+        run: echo "status=failed" >> $GITHUB_OUTPUT
 
       - name: Report alignment results
         if: always()
@@ -34,25 +41,22 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           python3 scripts/validate_alignment.py >> $GITHUB_STEP_SUMMARY 2>&1 || true
 
-  # Auto-rerun the render workflow if alignment fails
   rerender-on-failure:
     needs: validate
     if: needs.validate.outputs.status == 'failed'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
     steps:
       - name: Trigger rerender
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.actions.createWorkflowDispatch({
+            await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'render-video.yml',
               ref: 'main',
-            })
-            console.log('Alignment check failed — triggered rerender of render-video.yml');
-
-      - name: Notify
-        run: |
-          echo "::warning::Alignment mismatch detected! Rerendering video automatically..."
-          echo "The render workflow has been re-triggered to fix alignment issues."
+            });
+            core.notice('Alignment check failed — triggered rerender');
