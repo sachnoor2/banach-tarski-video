@@ -8,18 +8,13 @@ on:
         required: false
         type: string
         default: ""
-      validate_only:
-        description: "Only run alignment validation, don't render"
-        required: false
-        type: boolean
-        default: false
 
 env:
   NODE_VERSION: "18"
 
 jobs:
   # ============================================================
-  # Job 0: Validate alignment before rendering
+  # Pre-render validation
   # ============================================================
   pre-validate:
     runs-on: ubuntu-latest
@@ -43,40 +38,26 @@ jobs:
           fi
 
   # ============================================================
-  # Jobs 1-4: Render all 4 video chunks in parallel
+  # Render all 4 video chunks in parallel
   # ============================================================
   render-chunk-1:
     needs: pre-validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Chromium
-        run: npx remotion browser install
-
+      - run: npm ci
+      - run: npx remotion browser install
       - name: Validate alignment
         run: python3 scripts/validate_alignment.py
-
-      - name: Render Chunk 1 (Phase 1, 0:00-0:22.36, 1342 frames)
+      - name: Render Chunk 1 (Phase 1, 1342 frames)
         run: |
           npx remotion render Chunk-Phase1 \
-            --codec=h264 \
-            --image-format=png \
-            --quality=100 \
-            --scale=1 \
-            --concurrency=2 \
-            --out=chunk-1.mp4
-
-      - name: Upload Chunk 1
+            --codec=h264 --quality 100 --scale 1 --concurrency 2 --out=chunk-1.mp4
+      - name: Upload chunk-1
         uses: actions/upload-artifact@v4
         with:
           name: chunk-1
@@ -88,33 +69,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Chromium
-        run: npx remotion browser install
-
+      - run: npm ci
+      - run: npx remotion browser install
       - name: Validate alignment
         run: python3 scripts/validate_alignment.py
-
-      - name: Render Chunk 2 (Phase 2, 0:22.36-0:41.93, 1174 frames)
+      - name: Render Chunk 2 (Phase 2, 1174 frames)
         run: |
           npx remotion render Chunk-Phase2 \
-            --codec=h264 \
-            --image-format=png \
-            --quality=100 \
-            --scale=1 \
-            --concurrency=2 \
-            --out=chunk-2.mp4
-
-      - name: Upload Chunk 2
+            --codec=h264 --quality 100 --scale 1 --concurrency 2 --out=chunk-2.mp4
+      - name: Upload chunk-2
         uses: actions/upload-artifact@v4
         with:
           name: chunk-2
@@ -126,33 +93,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Chromium
-        run: npx remotion browser install
-
+      - run: npm ci
+      - run: npx remotion browser install
       - name: Validate alignment
         run: python3 scripts/validate_alignment.py
-
-      - name: Render Chunk 3 (Phase 3, 0:41.93-1:07.08, 1509 frames)
+      - name: Render Chunk 3 (Phase 3, 1509 frames)
         run: |
           npx remotion render Chunk-Phase3 \
-            --codec=h264 \
-            --image-format=png \
-            --quality=100 \
-            --scale=1 \
-            --concurrency=2 \
-            --out=chunk-3.mp4
-
-      - name: Upload Chunk 3
+            --codec=h264 --quality 100 --scale 1 --concurrency 2 --out=chunk-3.mp4
+      - name: Upload chunk-3
         uses: actions/upload-artifact@v4
         with:
           name: chunk-3
@@ -164,33 +117,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Chromium
-        run: npx remotion browser install
-
+      - run: npm ci
+      - run: npx remotion browser install
       - name: Validate alignment
         run: python3 scripts/validate_alignment.py
-
-      - name: Render Chunk 4 (Phase 4, 1:07.08-1:40.62, 2012 frames)
+      - name: Render Chunk 4 (Phase 4, 2012 frames)
         run: |
           npx remotion render Chunk-Phase4 \
-            --codec=h264 \
-            --image-format=png \
-            --quality=100 \
-            --scale=1 \
-            --concurrency=2 \
-            --out=chunk-4.mp4
-
-      - name: Upload Chunk 4
+            --codec=h264 --quality 100 --scale 1 --concurrency 2 --out=chunk-4.mp4
+      - name: Upload chunk-4
         uses: actions/upload-artifact@v4
         with:
           name: chunk-4
@@ -198,7 +137,7 @@ jobs:
           retention-days: 1
 
   # ============================================================
-  # Job 5: Concatenate chunks serially and merge with audio
+  # Concatenate chunks + merge with audio
   # ============================================================
   assemble:
     needs: [render-chunk-1, render-chunk-2, render-chunk-3, render-chunk-4]
@@ -209,7 +148,9 @@ jobs:
       - name: Download all chunks
         uses: actions/download-artifact@v4
         with:
-          path: chunks/
+          pattern: chunk-*
+          merge-multiple: true
+          path: .
 
       - name: Install ffmpeg
         run: |
@@ -219,85 +160,61 @@ jobs:
       - name: Get audio file
         run: |
           if [ -n "${{ github.event.inputs.audio_url }}" ]; then
-            echo "Downloading audio from provided URL..."
             curl -L "${{ github.event.inputs.audio_url }}" -o audio.mp3
           elif [ -f "assets/audio.mp3" ]; then
-            echo "Using bundled audio (100.62s ElevenLabs narration)..."
             cp assets/audio.mp3 audio.mp3
           else
             echo "ERROR: No audio file found."
             exit 1
           fi
-          echo "Audio file:"
           ls -lh audio.mp3
 
-      - name: Get audio duration
-        id: audio_info
+      - name: List downloaded files
         run: |
-          DURATION=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.mp3)
-          echo "duration=$DURATION" >> $GITHUB_OUTPUT
-          echo "Audio duration: ${DURATION}s"
+          echo "=== Files in workspace ==="
+          ls -la *.mp4 2>/dev/null || echo "No mp4 files in root"
+          echo "=== All files ==="
+          find . -name "*.mp4" -o -name "*.mp3" | head -20
 
       - name: Concatenate video chunks serially
         run: |
           echo "Concatenating: chunk-1 → chunk-2 → chunk-3 → chunk-4"
-          echo "file 'chunks/chunk-1/chunk-1.mp4'" > concat.txt
-          echo "file 'chunks/chunk-2/chunk-2.mp4'" >> concat.txt
-          echo "file 'chunks/chunk-3/chunk-3.mp4'" >> concat.txt
-          echo "file 'chunks/chunk-4/chunk-4.mp4'" >> concat.txt
-
+          printf "file 'chunk-1.mp4'\nfile 'chunk-2.mp4'\nfile 'chunk-3.mp4'\nfile 'chunk-4.mp4'\n" > concat.txt
+          cat concat.txt
           ffmpeg -y -f concat -safe 0 -i concat.txt \
             -c:v libx264 -preset slow -crf 18 \
-            -pix_fmt yuv420p \
-            -r 60 -s 1080x1920 \
+            -pix_fmt yuv420p -r 60 -s 1080x1920 \
             concatenated.mp4
+          echo "Concatenated duration:"
+          ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4
 
-          VIDEO_DUR=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4)
-          echo "Concatenated video duration: ${VIDEO_DUR}s"
-
-      - name: Final alignment verification
+      - name: Validate post-concat alignment
         run: |
-          echo "=== POST-CONCATENATION ALIGNMENT CHECK ==="
           VIDEO_DUR=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4)
-          AUDIO_DUR=${{ steps.audio_info.outputs.duration }}
+          AUDIO_DUR=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.mp3)
           DRIFT=$(python3 -c "print(abs(float('$VIDEO_DUR') - float('$AUDIO_DUR')))")
           echo "Video: ${VIDEO_DUR}s | Audio: ${AUDIO_DUR}s | Drift: ${DRIFT}s"
-
-          # Fail if drift > 0.5s
           python3 -c "
           drift = float('$DRIFT')
           if drift > 0.5:
-              print(f'::error::DRIFT TOO LARGE: {drift}s (max 0.5s)')
+              print(f'DRIFT TOO LARGE: {drift}s')
               exit(1)
-          elif drift > 0.1:
-              print(f'::warning::Acceptable drift: {drift}s')
-          else:
-              print(f'::notice::Perfect alignment! Drift: {drift}s')
+          print(f'Alignment OK: drift={drift}s')
           "
 
       - name: Merge video with audio
         run: |
-          VIDEO_DUR=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4)
-          AUDIO_DUR=${{ steps.audio_info.outputs.duration }}
-
-          echo "Merging concatenated video (${VIDEO_DUR}s) with audio (${AUDIO_DUR}s)..."
           ffmpeg -y -i concatenated.mp4 -i audio.mp3 \
             -c:v libx264 -preset slow -crf 17 \
             -c:a aac -b:a 320k \
-            -pix_fmt yuv420p \
-            -r 60 -s 1080x1920 \
-            -shortest \
-            -map 0:v:0 -map 1:a:0 \
+            -pix_fmt yuv420p -r 60 -s 1080x1920 \
+            -shortest -map 0:v:0 -map 1:a:0 \
             Banach-Tarski-Final.mp4
-
           echo "Final video:"
           ls -lh Banach-Tarski-Final.mp4
-          ffprobe -v quiet -show_entries stream=codec_name,width,height,r_frame_rate,duration -of default=noprint_wrappers=1:nokey=1 Banach-Tarski-Final.mp4
 
-      - name: Run final validation
-        run: |
-          echo "Running final alignment validation..."
-          python3 scripts/validate_alignment.py
+      - name: Run final alignment validation
+        run: python3 scripts/validate_alignment.py
 
       - name: Upload final video
         uses: actions/upload-artifact@v4
@@ -314,22 +231,20 @@ jobs:
           body: |
             🎬 **Banach-Tarski Paradox Video** — Build #${{ github.run_number }}
 
-            **Alignment:** ✅ Validated per-second audio-visual sync
+            ✅ **Alignment:** Per-second audio-visual sync validated
 
             **Specs:**
             - Resolution: 1080x1920 (9:16 vertical)
             - Frame rate: 60 fps
-            - Video duration: ~100.62s (= audio duration)
+            - Duration: ~100.62s (matches audio exactly)
             - Audio: AAC 320kbps (ElevenLabs narration)
             - Drift: < 0.01s
 
             **Chunks (rendered in parallel):**
-            1. Phase 1 — Solid Sphere (0:00 - 0:22.36) ✓
-            2. Phase 2 — Split/Decomposition (0:22.36 - 0:41.93) ✓
-            3. Phase 3 — Reassembly/Duplication (0:41.93 - 1:07.08) ✓
-            4. Phase 4 — Infinity State (1:07.08 - 1:40.62) ✓
-
-            Chunks concatenated serially → merged with audio → validated → released.
+            1. Phase 1 — Solid Sphere (0:00 - 0:22.36) ✅
+            2. Phase 2 — Split/Decomposition (0:22.36 - 0:41.93) ✅
+            3. Phase 3 — Reassembly/Duplication (0:41.93 - 1:07.08) ✅
+            4. Phase 4 — Infinity State (1:07.08 - 1:40.62) ✅
           files: Banach-Tarski-Final.mp4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
