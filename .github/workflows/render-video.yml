@@ -142,6 +142,10 @@ jobs:
   assemble:
     needs: [render-chunk-1, render-chunk-2, render-chunk-3, render-chunk-4]
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
 
@@ -150,24 +154,32 @@ jobs:
         with:
           name: chunk-1
           path: .
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.run_id }}
 
       - name: Download chunk-2
         uses: actions/download-artifact@v4
         with:
           name: chunk-2
           path: .
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.run_id }}
 
       - name: Download chunk-3
         uses: actions/download-artifact@v4
         with:
           name: chunk-3
           path: .
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.run_id }}
 
       - name: Download chunk-4
         uses: actions/download-artifact@v4
         with:
           name: chunk-4
           path: .
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.run_id }}
 
       - name: Install ffmpeg
         run: |
