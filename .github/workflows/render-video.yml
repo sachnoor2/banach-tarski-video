@@ -65,37 +65,37 @@ jobs:
         run: |
           echo "=== Rendering Chunk 1/4 ==="
           npx remotion render Chunk-Phase1 \
-            --codec=h264 --quality 100 --scale 1 --concurrency 2 \
-            --out=chunk-1.mp4
-          # Find and move the output file to root
-          find . -name "chunk-1.mp4" -not -path "./.git/*" -exec mv {} ./chunk-1.mp4 \;
+            --codec=h264 --quality 100 --scale 1 --concurrency 2
+          # Remotion outputs to out/<compositionId>.mp4 by default
+          ls -lh out/
+          mv out/Chunk-Phase1.mp4 chunk-1.mp4
           ls -lh chunk-1.mp4
 
       - name: Render Chunk 2 (Phase 2 — Split, 0:22.36-0:41.93, 1174 frames)
         run: |
           echo "=== Rendering Chunk 2/4 ==="
+          rm -f chunk-1.mp4
           npx remotion render Chunk-Phase2 \
-            --codec=h264 --quality 100 --scale 1 --concurrency 2 \
-            --out=chunk-2.mp4
-          find . -name "chunk-2.mp4" -not -path "./.git/*" -exec mv {} ./chunk-2.mp4 \;
+            --codec=h264 --quality 100 --scale 1 --concurrency 2
+          mv out/Chunk-Phase2.mp4 chunk-2.mp4
           ls -lh chunk-2.mp4
 
       - name: Render Chunk 3 (Phase 3 — Reassembly, 0:41.93-1:07.08, 1509 frames)
         run: |
           echo "=== Rendering Chunk 3/4 ==="
+          rm -f chunk-2.mp4
           npx remotion render Chunk-Phase3 \
-            --codec=h264 --quality 100 --scale 1 --concurrency 2 \
-            --out=chunk-3.mp4
-          find . -name "chunk-3.mp4" -not -path "./.git/*" -exec mv {} ./chunk-3.mp4 \;
+            --codec=h264 --quality 100 --scale 1 --concurrency 2
+          mv out/Chunk-Phase3.mp4 chunk-3.mp4
           ls -lh chunk-3.mp4
 
       - name: Render Chunk 4 (Phase 4 — Infinity, 1:07.08-1:40.62, 2012 frames)
         run: |
           echo "=== Rendering Chunk 4/4 ==="
+          rm -f chunk-3.mp4
           npx remotion render Chunk-Phase4 \
-            --codec=h264 --quality 100 --scale 1 --concurrency 2 \
-            --out=chunk-4.mp4
-          find . -name "chunk-4.mp4" -not -path "./.git/*" -exec mv {} ./chunk-4.mp4 \;
+            --codec=h264 --quality 100 --scale 1 --concurrency 2
+          mv out/Chunk-Phase4.mp4 chunk-4.mp4
           ls -lh chunk-4.mp4
 
       # ---- Concatenate all chunks serially ----
