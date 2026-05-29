@@ -68,13 +68,12 @@ jobs:
 
       - name: Render Chunk 1 (Phase 1, 0:00-0:22.36, 1342 frames)
         run: |
-          npx remotion render Chunk-Phase1 \
+          npx remotion render src/index.ts Chunk-Phase1 chunk-1.mp4 \
             --codec=h264 \
             --image-format=png \
             --quality=100 \
             --scale=1 \
-            --concurrency=2 \
-            --out=chunk-1.mp4
+            --concurrency=2
 
       - name: Upload Chunk 1
         uses: actions/upload-artifact@v4
@@ -106,13 +105,12 @@ jobs:
 
       - name: Render Chunk 2 (Phase 2, 0:22.36-0:41.93, 1174 frames)
         run: |
-          npx remotion render Chunk-Phase2 \
+          npx remotion render src/index.ts Chunk-Phase2 chunk-2.mp4 \
             --codec=h264 \
             --image-format=png \
             --quality=100 \
             --scale=1 \
-            --concurrency=2 \
-            --out=chunk-2.mp4
+            --concurrency=2
 
       - name: Upload Chunk 2
         uses: actions/upload-artifact@v4
@@ -144,13 +142,12 @@ jobs:
 
       - name: Render Chunk 3 (Phase 3, 0:41.93-1:07.08, 1509 frames)
         run: |
-          npx remotion render Chunk-Phase3 \
+          npx remotion render src/index.ts Chunk-Phase3 chunk-3.mp4 \
             --codec=h264 \
             --image-format=png \
             --quality=100 \
             --scale=1 \
-            --concurrency=2 \
-            --out=chunk-3.mp4
+            --concurrency=2
 
       - name: Upload Chunk 3
         uses: actions/upload-artifact@v4
@@ -182,13 +179,12 @@ jobs:
 
       - name: Render Chunk 4 (Phase 4, 1:07.08-1:40.62, 2012 frames)
         run: |
-          npx remotion render Chunk-Phase4 \
+          npx remotion render src/index.ts Chunk-Phase4 chunk-4.mp4 \
             --codec=h264 \
             --image-format=png \
             --quality=100 \
             --scale=1 \
-            --concurrency=2 \
-            --out=chunk-4.mp4
+            --concurrency=2
 
       - name: Upload Chunk 4
         uses: actions/upload-artifact@v4
