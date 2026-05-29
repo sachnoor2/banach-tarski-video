@@ -15,7 +15,7 @@ env:
 jobs:
   # ============================================================
   # Single job: validate → render all chunks → concatenate → merge → release
-  # This avoids cross-job artifact download issues entirely
+  # Avoids cross-job artifact download issues entirely
   # ============================================================
   render-and-assemble:
     runs-on: ubuntu-latest
@@ -58,48 +58,45 @@ jobs:
           ls -lh audio.mp3
           ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.mp3
 
-      # ---- Render all 4 chunks sequentially ----
-      # This avoids artifact upload/download between jobs entirely
+      # ---- Render all 4 chunks sequentially (no artifact juggling) ----
 
-      - name: Render Chunk 1 (Phase 1 — Solid Sphere, 0:00-0:22.36, 1342 frames)
+      - name: Render Chunk 1 (Phase 1, 1342 frames)
         run: |
-          echo "=== Rendering Chunk 1/4 ==="
+          echo "=== [1/4] Phase 1: Solid Sphere (0:00 - 0:22.36) ==="
           npx remotion render Chunk-Phase1 \
-            --codec=h264 --quality 100 --scale 1 --concurrency 2
-          # Remotion outputs to out/<compositionId>.mp4 by default
-          ls -lh out/
-          mv out/Chunk-Phase1.mp4 chunk-1.mp4
+            --codec=h264 --quality 100 --scale 1 --concurrency 2 \
+            --out=chunk-1.mp4
           ls -lh chunk-1.mp4
 
-      - name: Render Chunk 2 (Phase 2 — Split, 0:22.36-0:41.93, 1174 frames)
+      - name: Render Chunk 2 (Phase 2, 1174 frames)
         run: |
-          echo "=== Rendering Chunk 2/4 ==="
+          echo "=== [2/4] Phase 2: Split (0:22.36 - 0:41.93) ==="
           npx remotion render Chunk-Phase2 \
-            --codec=h264 --quality 100 --scale 1 --concurrency 2
-          mv out/Chunk-Phase2.mp4 chunk-2.mp4
+            --codec=h264 --quality 100 --scale 1 --concurrency 2 \
+            --out=chunk-2.mp4
           ls -lh chunk-2.mp4
 
-      - name: Render Chunk 3 (Phase 3 — Reassembly, 0:41.93-1:07.08, 1509 frames)
+      - name: Render Chunk 3 (Phase 3, 1509 frames)
         run: |
-          echo "=== Rendering Chunk 3/4 ==="
+          echo "=== [3/4] Phase 3: Reassembly (0:41.93 - 1:07.08) ==="
           npx remotion render Chunk-Phase3 \
-            --codec=h264 --quality 100 --scale 1 --concurrency 2
-          mv out/Chunk-Phase3.mp4 chunk-3.mp4
+            --codec=h264 --quality 100 --scale 1 --concurrency 2 \
+            --out=chunk-3.mp4
           ls -lh chunk-3.mp4
 
-      - name: Render Chunk 4 (Phase 4 — Infinity, 1:07.08-1:40.62, 2012 frames)
+      - name: Render Chunk 4 (Phase 4, 2012 frames)
         run: |
-          echo "=== Rendering Chunk 4/4 ==="
+          echo "=== [4/4] Phase 4: Infinity (1:07.08 - 1:40.62) ==="
           npx remotion render Chunk-Phase4 \
-            --codec=h264 --quality 100 --scale 1 --concurrency 2
-          mv out/Chunk-Phase4.mp4 chunk-4.mp4
+            --codec=h264 --quality 100 --scale 1 --concurrency 2 \
+            --out=chunk-4.mp4
           ls -lh chunk-4.mp4
 
       # ---- Concatenate all chunks serially ----
       - name: Concatenate chunks
         run: |
           echo "Concatenating: chunk-1 → chunk-2 → chunk-3 → chunk-4"
-          printf "file 'chunk-1.mp4'\\nfile 'chunk-2.mp4'\\nfile 'chunk-3.mp4'\\nfile 'chunk-4.mp4'\\n" > concat.txt
+          printf "file 'chunk-1.mp4'\nfile 'chunk-2.mp4'\nfile 'chunk-3.mp4'\nfile 'chunk-4.mp4'\n" > concat.txt
           cat concat.txt
 
           ffmpeg -y -f concat -safe 0 -i concat.txt \
@@ -107,7 +104,7 @@ jobs:
             -pix_fmt yuv420p -r 60 -s 1080x1920 \
             concatenated.mp4
 
-          echo "Concatenated video:"
+          echo "=== Concatenated video ==="
           ls -lh concatenated.mp4
           VIDEO_DUR=$(ffprobe -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 concatenated.mp4)
           echo "Duration: ${VIDEO_DUR}s"
@@ -165,8 +162,6 @@ jobs:
           PHASE2_END = 2516
           PHASE3_END = 4025
           TOTAL = 6037
-          C1_END = 1510
-          C2_END = 2851
 
           for sec in range(101):
               f = sec * FPS
@@ -222,7 +217,7 @@ jobs:
             | 0:41.93 - 1:07.08 | Phase 3 | S → S₁ + S₂ (V → 2V) | Twin sphere formation |
             | 1:07.08 - 1:40.62 | Phase 4 | ℵ₀ + ℵ₀ = ℵ₀ | Infinity equivalence |
 
-            Rendered in single job → concatenated → merged → validated → released.
+            Rendered → concatenated → merged → validated → released.
           files: Banach-Tarski-Final.mp4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
