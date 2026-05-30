@@ -1,4 +1,4 @@
-import { BanachTarskiFull } from "./compositions/BanachTarskiFull";
+import { RemotionRoot } from "./compositions/BanachTarskiFull";
 import { registerRoot } from "remotion";
 
-registerRoot(BanachTarskiFull);
+registerRoot(RemotionRoot);
